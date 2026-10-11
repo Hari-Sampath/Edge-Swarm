@@ -1,0 +1,8 @@
+build/
+install/
+log/
+results/
+.ros/
+__pycache__/
+.pytest_cache/
+*.pyc
