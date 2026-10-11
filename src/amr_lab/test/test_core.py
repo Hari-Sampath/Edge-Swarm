@@ -61,3 +61,17 @@ def test_recovery_turn_is_deterministic_and_ordered():
     assert resolver.plan(state,{})==[]
     state['robot_id']='robot_2'
     assert resolver.plan(state,{})
+
+
+def test_seeded_dynamic_task_arrivals_repeat_and_release_once():
+    from amr_lab.core.task_stream import SeededTaskStream
+    tasks=small_world().tasks(19,12)
+    first=SeededTaskStream(tasks,19,.35); second=SeededTaskStream(tasks,19,.35)
+    arrivals_a=[first.arrivals() for _ in range(80)]
+    arrivals_b=[second.arrivals() for _ in range(80)]
+    assert arrivals_a==arrivals_b
+    released=[task_id for batch in arrivals_a for task_id,_ in batch]
+    assert released==sorted(tasks)
+    immediate=SeededTaskStream(tasks,19,0.0)
+    assert len(immediate.arrivals())==len(tasks)
+    assert immediate.arrivals()==[]
