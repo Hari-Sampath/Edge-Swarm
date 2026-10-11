@@ -54,3 +54,10 @@ def test_loss_ratio_matches_configured_probability_per_attempt():
     for _ in range(100000):filt.keep()
     assert filt.attempts==100000
     assert abs(filt.dropped/filt.attempts-.2)<.01
+
+def test_recovery_turn_is_deterministic_and_ordered():
+    world=small_world(); resolver=ReservationResolver(world)
+    state={'robot_id':'robot_1','tick':20,'position':(1,1),'goal':(4,1),'wait_streak':10,'recovery_ticks':10,'robot_count':3}
+    assert resolver.plan(state,{})==[]
+    state['robot_id']='robot_2'
+    assert resolver.plan(state,{})

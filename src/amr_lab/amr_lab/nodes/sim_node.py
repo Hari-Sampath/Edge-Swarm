@@ -28,7 +28,7 @@ class Simulator(Node):
         for r in self.positions:
             self.create_subscription(String,f'/{r}/move',lambda m,name=r:self.request(name,m),10)
         period=1/max(1.0,float(p['tick_rate']))
-        self.timer=self.create_timer(min(period,.001) if p['headless'] else period,self.advance)
+        self.timer=self.create_timer(max(period,.02) if p['headless'] else period,self.advance)
         self.max_ticks=int(p['max_ticks']); self.publish_poses()
     def set_drained(self,msg): self.drained=msg.data
     def request(self,name,msg):
@@ -43,8 +43,7 @@ class Simulator(Node):
         if self.finished:return
         if len(self.requests)!=len(self.positions):
             self.pulse+=1
-            if self.pulse%10==0:
-                self.publish_poses(); self.pub_tick.publish(Int64(data=self.tick))
+            self.publish_poses(); self.pub_tick.publish(Int64(data=self.tick))
             return
         old=dict(self.positions); targets={r:self.requests.pop(r,old[r]) for r in old}
         valid={r:(c if c in self.world.free and self.world.distance(old[r],c)<=1 else old[r]) for r,c in targets.items()}

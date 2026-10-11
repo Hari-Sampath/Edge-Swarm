@@ -5,8 +5,12 @@ class ReservationResolver:
     """Plan around last heard positions, intents, and choke resources."""
     def __init__(self, world, intent_steps=8): self.world=world; self.intent_steps=intent_steps
     def plan(self, robot_state, peer_view):
-        """Return the next path as cell and simulation tick pairs."""
+        """Return a safe path, or yield the deterministic recovery turn."""
         tick=robot_state['tick']; occupied=set(); intents=set(); me=robot_state['robot_id']
+        recovery=robot_state.get('recovery_ticks',0); count=robot_state.get('robot_count',len(peer_view)+1)
+        if recovery and robot_state.get('wait_streak',0)>=recovery:
+            robots=[f'robot_{i}' for i in range(count)]
+            if robots and robots[(tick//recovery)%len(robots)]!=me:return []
         for peer,data in peer_view.items():
             if peer==me: continue
             age=tick-data['tick']

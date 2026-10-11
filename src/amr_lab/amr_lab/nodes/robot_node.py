@@ -14,14 +14,14 @@ class RobotNode(Node):
     """Plan only from this robot's pose, assignment, and delivered bus messages."""
     def __init__(self):
         super().__init__('robot')
-        defaults={'robot_id':'robot_0','robot_count':4,'seed':1,'packet_loss':0.0,'peer_timeout':6,'intent_steps':8,'conflict_resolver':'reservation'}
+        defaults={'robot_id':'robot_0','robot_count':4,'seed':1,'packet_loss':0.0,'peer_timeout':6,'intent_steps':8,'conflict_resolver':'reservation','deadlock_ticks':20}
         for k,v in defaults.items():self.declare_parameter(k,v)
         self.p={k:self.get_parameter(k).value for k in defaults}; self.name=self.p['robot_id']
         cfg=Path(get_package_share_directory('amr_lab'))/'config'/'warehouse.yaml'
         rows=[line.strip().split('"')[1] for line in cfg.read_text().splitlines() if line.strip().startswith('- "')]
         self.world=World(tuple(rows)); self.resolver=CONFLICTS[self.p['conflict_resolver']](self.world,int(self.p['intent_steps']))
         idx=int(self.name.split('_')[-1]); self.loss=LossFilter(float(self.p['packet_loss']),int(self.p['seed'])+idx*1009)
-        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0
+        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0; self.wait_streak=0
         bus_qos=10
         self.pub_bus=self.create_publisher(String,f'/bus/{self.name}',bus_qos)
         self.pub_move=self.create_publisher(String,f'/{self.name}/move',10)
@@ -71,7 +71,7 @@ class RobotNode(Node):
         intent=[]
         if self.task:
             goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal'])
-            path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':tuple(self.pose['cell']),'goal':goal,'timeout':int(self.p['peer_timeout'])},self.peers)
+            path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':tuple(self.pose['cell']),'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count'])},self.peers)
             intent=path
         bus=BusMessage(self.name,self.tick,tuple(self.pose['cell']),intent[:int(self.p['intent_steps'])])
         self.last_bus=bus.encode(); self.pub_bus.publish(String(data=self.last_bus)); self.act_if_ready()
@@ -88,12 +88,17 @@ class RobotNode(Node):
                     self.pub_status.publish(String(data=json.dumps({'robot_id':self.name,'task_id':self.task['task_id'],'status':'completed'})))
                     self.task=None; why='task delivered'
             if self.task:
-                path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout'])},self.peers)
+                path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count'])},self.peers)
                 if path:target=tuple(path[0][0]); why=f'clear next reservation at {target}'
+                elif self.wait_streak>=int(self.p['deadlock_ticks']):
+                    count=int(self.p['robot_count']); token=f'robot_{(self.tick//int(self.p["deadlock_ticks"]))%count}'
+                    why=f'yielding recovery turn to {token}' if token!=self.name else 'recovery turn has no safe route'
                 else:why='no safe route is available'
         action='MOVE' if target!=cell else 'WAIT'
         if action=='WAIT':
-            self.waits+=1; self.pub_wait.publish(String(data=json.dumps({'robot_id':self.name,'tick':self.tick})))
+            self.waits+=1
+            self.wait_streak=self.wait_streak+1 if self.task else 0; self.pub_wait.publish(String(data=json.dumps({'robot_id':self.name,'tick':self.tick})))
+        if action=='MOVE':self.wait_streak=0
         self.acted_tick=self.tick
         line=f'[t={self.tick}] {self.name} | {action} | {why}'; self.get_logger().info(line)
         with (self.log_path/'decisions.log').open('a') as log:log.write(line+'\n')
