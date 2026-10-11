@@ -51,10 +51,10 @@ class RobotNode(Node):
         try:
             data=BusMessage.decode(msg.data); delivered=self.loss.keep()
             self.pub_attempt.publish(Int64(data=1)); self.pub_drop.publish(Int64(data=int(not delivered)))
-            if data.tick>=self.tick:
+            if data.tick==self.tick:
                 self.seen.add(peer)
                 if delivered:self.peers[peer]={'tick':data.tick,'position':data.position,'intent':data.intent,'has_task':data.has_task,'recovering':data.recovering}
-                self.pending[(data.tick,peer)]=(data,delivered)
+            elif data.tick>self.tick and delivered:self.pending[(data.tick,peer)]=(data,True)
         except (ValueError,KeyError,TypeError):pass
         self.act_if_ready()
     def on_tick(self,msg):
