@@ -12,9 +12,9 @@ class MetricsNode(Node):
         defaults={'seed':1,'packet_loss':0.0,'robot_count':4,'max_ticks':3000,'deadlock_ticks':20}
         for k,v in defaults.items():self.declare_parameter(k,v)
         self.p={k:self.get_parameter(k).value for k in defaults}; self.tick=0; self.total=0; self.done=0
-        self.distance=0; self.waits=0; self.collisions=0; self.attempts=0; self.drops=0; self.stalled=0; self.deadlocks=0; self.last_move=0; self.poses={}; self.finished=False
+        self.distance=0; self.waits=0; self.collisions=0; self.attempts=0; self.drops=0; self.stalled=0; self.deadlocks=0; self.last_move=0; self.poses={}; self.finished=False; self.wait_events=set()
         self.csv=Path(os.environ.get('AMR_TRIALS_CSV',str(Path.cwd()/'results'/'trials.csv'))); self.csv.parent.mkdir(parents=True,exist_ok=True)
-        for topic,cb,typ in [('/tick',self.on_tick,Int64),('/metrics/collision',self.on_collision,Int64),('/metrics/delivery_attempts',self.on_attempt,Int64),('/metrics/delivery_drops',self.on_drop,Int64),('/metrics/wait',self.on_wait,Int64),('/tasks/total',self.on_total,Int64),('/tasks/completed',self.on_done,Int64),('/simulation/finished',self.on_finish,Bool)]:self.create_subscription(typ,topic,cb,10)
+        for topic,cb,typ in [('/tick',self.on_tick,Int64),('/metrics/collision',self.on_collision,Int64),('/metrics/delivery_attempts',self.on_attempt,Int64),('/metrics/delivery_drops',self.on_drop,Int64),('/metrics/wait',self.on_wait,String),('/tasks/total',self.on_total,Int64),('/tasks/completed',self.on_done,Int64),('/simulation/finished',self.on_finish,Bool)]:self.create_subscription(typ,topic,cb,10)
         for i in range(int(self.p['robot_count'])):self.create_subscription(String,f'/robot_{i}/pose',lambda m,n=f'robot_{i}':self.on_pose(n,m),10)
     def on_pose(self,name,msg):
         try:
@@ -30,11 +30,17 @@ class MetricsNode(Node):
     def on_collision(self,msg):self.collisions=msg.data
     def on_attempt(self,msg):self.attempts+=msg.data
     def on_drop(self,msg):self.drops+=msg.data
-    def on_wait(self,msg):self.waits+=msg.data
+    def on_wait(self,msg):
+        try:
+            event=json.loads(msg.data); key=(event['robot_id'],int(event['tick']))
+            if key not in self.wait_events:self.wait_events.add(key); self.waits=len(self.wait_events)
+        except (ValueError,KeyError,TypeError):pass
     def on_total(self,msg):self.total=msg.data
     def on_done(self,msg):self.done=msg.data
     def on_finish(self,msg):
-        if msg.data and not self.finished:self.finished=True; self.write()
+        if msg.data and not self.finished:self.finished=True; self.finish_timer=self.create_timer(.1,self.write_once)
+    def write_once(self):
+        self.finish_timer.cancel(); self.write()
     def write(self):
         row={'seed':self.p['seed'],'packet_loss':self.p['packet_loss'],'tasks_total':self.total,'tasks_completed':self.done,'makespan':self.tick,'total_distance':self.distance,'collisions':self.collisions,'wait_steps':self.waits,'deadlocks':self.deadlocks,'stalled_ticks':self.stalled,'timed_out':self.done<self.total,'messages_sent':self.attempts,'messages_dropped':self.drops}
         with self.csv.open('a',newline='') as f:

@@ -48,3 +48,9 @@ def test_planners_do_not_import_simulator_internals():
                 assert all('sim_node' not in alias.name for alias in node.names), path
             if isinstance(node,ast.ImportFrom):
                 assert 'sim_node' not in (node.module or ''), path
+
+def test_loss_ratio_matches_configured_probability_per_attempt():
+    filt=LossFilter(.2,90210)
+    for _ in range(100000):filt.keep()
+    assert filt.attempts==100000
+    assert abs(filt.dropped/filt.attempts-.2)<.01
