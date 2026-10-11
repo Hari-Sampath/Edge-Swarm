@@ -29,6 +29,9 @@ def test_reservations_avoid_peer_vertex_and_swap():
     path=resolver.plan({'robot_id':'robot_1','tick':3,'position':(1,1),'goal':(4,1)},peer)
     assert path and all(not (cell==(2,1) and t==4) and not (cell==(2,2) and t==4) for cell,t in path)
     assert not (path[0][0]==(2,1) and peer['robot_0']['intent'][0][0]==(1,1))
+    swap={'robot_0':{'tick':3,'position':(2,1),'intent':[((1,1),4)]}}
+    detour=resolver.plan({'robot_id':'robot_1','tick':3,'position':(1,1),'goal':(2,1)},swap)
+    assert detour and detour[0]!=( (2,1),4 )
 
 def test_seeded_loss_rate():
     filt=LossFilter(.2,17); kept=sum(filt.keep() for _ in range(10000)); assert abs(kept/10000-.8)<.02
