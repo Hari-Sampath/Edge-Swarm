@@ -9,6 +9,8 @@ class BusMessage:
     tick: int
     position: tuple
     intent: list
+    has_task: bool = False
+    recovering: bool = False
     def encode(self):
         """Serialize this record as JavaScript Object Notation."""
         return json.dumps(asdict(self))

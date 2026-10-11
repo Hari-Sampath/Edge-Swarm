@@ -57,10 +57,11 @@ def test_loss_ratio_matches_configured_probability_per_attempt():
 
 def test_recovery_turn_is_deterministic_and_ordered():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_1','tick':20,'position':(1,1),'goal':(4,1),'wait_streak':10,'recovery_ticks':10,'robot_count':3}
-    assert resolver.plan(state,{})==[]
-    state['robot_id']='robot_2'
-    assert resolver.plan(state,{})
+    state={'robot_id':'robot_1','tick':20,'position':(1,1),'goal':(4,1),'wait_streak':10,'recovery_ticks':10,'robot_count':3,'recovering':True}
+    peers={'robot_0':{'tick':20,'position':(3,1),'intent':[],'has_task':True},'robot_1':{'tick':20,'position':(2,2),'intent':[],'has_task':False}}
+    assert resolver.plan(state,peers)==[]
+    state['robot_id']='robot_0'; state['position']=(3,1); state['goal']=(0,1)
+    assert resolver.plan(state,peers)
 
 
 def test_seeded_dynamic_task_arrivals_repeat_and_release_once():

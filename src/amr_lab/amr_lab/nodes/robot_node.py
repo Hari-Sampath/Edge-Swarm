@@ -21,7 +21,7 @@ class RobotNode(Node):
         rows=[line.strip().split('"')[1] for line in cfg.read_text().splitlines() if line.strip().startswith('- "')]
         self.world=World(tuple(rows)); self.resolver=CONFLICTS[self.p['conflict_resolver']](self.world,int(self.p['intent_steps']))
         idx=int(self.name.split('_')[-1]); self.loss=LossFilter(float(self.p['packet_loss']),int(self.p['seed'])+idx*1009)
-        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0; self.wait_streak=0
+        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.bus_tick=0; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0; self.wait_streak=0; self.recovering=False
         bus_qos=10
         self.pub_bus=self.create_publisher(String,f'/bus/{self.name}',bus_qos)
         self.pub_move=self.create_publisher(String,f'/{self.name}/move',10)
@@ -38,6 +38,7 @@ class RobotNode(Node):
     def on_pose(self,msg):
         try:
             self.pose=json.loads(msg.data)
+            if self.pose.get('tick')==self.tick and self.bus_tick!=self.tick:self.publish_intent()
         except ValueError:pass
     def on_assignment(self,msg):
         try:
@@ -52,33 +53,34 @@ class RobotNode(Node):
             self.pub_attempt.publish(Int64(data=1)); self.pub_drop.publish(Int64(data=int(not delivered)))
             if data.tick>=self.tick:
                 self.seen.add(peer)
-                if delivered:self.peers[peer]={'tick':data.tick,'position':data.position,'intent':data.intent}
+                if delivered:self.peers[peer]={'tick':data.tick,'position':data.position,'intent':data.intent,'has_task':data.has_task,'recovering':data.recovering}
                 self.pending[(data.tick,peer)]=(data,delivered)
         except (ValueError,KeyError,TypeError):pass
         self.act_if_ready()
     def on_tick(self,msg):
-        if msg.data==self.tick and self.last_bus is not None:
+        if msg.data==self.tick and self.last_bus is not None and self.pose and self.pose.get('tick')==self.tick:
             self.pub_bus.publish(String(data=self.last_bus)); return
         if msg.data<self.tick:return
-        self.tick=msg.data; self.seen=set()
+        if msg.data>self.tick:self.tick=msg.data; self.seen=set()
         for peer in list(self.peers):
             if self.peers[peer]['tick']<self.tick:self.peers[peer]=dict(self.peers[peer])
         for (tick,peer),(data,delivered) in list(self.pending.items()):
             if tick==self.tick:
                 self.seen.add(peer); self.pending.pop((tick,peer),None)
-                if delivered:self.peers[peer]={'tick':data.tick,'position':data.position,'intent':data.intent}
-        if self.pose is None:return
+                if delivered:self.peers[peer]={'tick':data.tick,'position':data.position,'intent':data.intent,'has_task':data.has_task,'recovering':data.recovering}
+        if self.pose and self.pose.get('tick')==self.tick and self.bus_tick!=self.tick:self.publish_intent()
+    def publish_intent(self):
         intent=[]
         if self.task:
             goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal'])
-            path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':tuple(self.pose['cell']),'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count'])},self.peers)
-            intent=path
-        bus=BusMessage(self.name,self.tick,tuple(self.pose['cell']),intent[:int(self.p['intent_steps'])])
-        self.last_bus=bus.encode(); self.pub_bus.publish(String(data=self.last_bus)); self.act_if_ready()
+            state={'robot_id':self.name,'tick':self.tick-1,'position':tuple(self.pose['cell']),'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering}
+            intent=self.resolver.plan(state,self.peers)
+        bus=BusMessage(self.name,self.tick,tuple(self.pose['cell']),intent[:int(self.p['intent_steps'])],bool(self.task),self.recovering)
+        self.last_bus=bus.encode(); self.bus_tick=self.tick; self.pub_bus.publish(String(data=self.last_bus)); self.act_if_ready()
     def act_if_ready(self):
         if self.acted_tick==self.tick:return
         peers={f'robot_{i}' for i in range(int(self.p['robot_count'])) if f'robot_{i}'!=self.name}
-        if self.pose is None or len(self.seen)<len(peers) or self.tick<=0:return
+        if self.pose is None or self.pose.get('tick')!=self.tick or len(self.seen)<len(peers) or self.tick<=0:return
         cell=tuple(self.pose['cell']); target=cell; why='no task assigned'
         if self.task:
             goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal'])
@@ -88,17 +90,23 @@ class RobotNode(Node):
                     self.pub_status.publish(String(data=json.dumps({'robot_id':self.name,'task_id':self.task['task_id'],'status':'completed'})))
                     self.task=None; why='task delivered'
             if self.task:
-                path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count'])},self.peers)
+                path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering},self.peers)
                 if path:target=tuple(path[0][0]); why=f'clear next reservation at {target}'
-                elif self.wait_streak>=int(self.p['deadlock_ticks']):
+                elif self.recovering or any(item.get('recovering',False) for item in self.peers.values()):
                     count=int(self.p['robot_count']); token=f'robot_{(self.tick//int(self.p["deadlock_ticks"]))%count}'
+                    active=[f'robot_{i}' for i in range(count) if f'robot_{i}'==self.name and self.task or self.peers.get(f'robot_{i}',{}).get('has_task',False)]
+                    token=active[((self.tick-1)//int(self.p['deadlock_ticks']))%len(active)] if active else self.name
                     why=f'yielding recovery turn to {token}' if token!=self.name else 'recovery turn has no safe route'
                 else:why='no safe route is available'
         action='MOVE' if target!=cell else 'WAIT'
         if action=='WAIT':
             self.waits+=1
-            self.wait_streak=self.wait_streak+1 if self.task else 0; self.pub_wait.publish(String(data=json.dumps({'robot_id':self.name,'tick':self.tick})))
-        if action=='MOVE':self.wait_streak=0
+            self.wait_streak=self.wait_streak+1 if self.task else 0
+            if self.task and self.wait_streak>=int(self.p['deadlock_ticks']):self.recovering=True
+            self.pub_wait.publish(String(data=json.dumps({'robot_id':self.name,'tick':self.tick})))
+        if action=='MOVE' and not self.recovering:self.wait_streak=0
+        if action=='MOVE' and self.recovering and target in self.world.parking_cells:
+            self.recovering=False; self.wait_streak=0
         self.acted_tick=self.tick
         line=f'[t={self.tick}] {self.name} | {action} | {why}'; self.get_logger().info(line)
         with (self.log_path/'decisions.log').open('a') as log:log.write(line+'\n')
