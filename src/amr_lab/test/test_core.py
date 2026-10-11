@@ -35,3 +35,16 @@ def test_reservations_avoid_peer_vertex_and_swap():
 
 def test_seeded_loss_rate():
     filt=LossFilter(.2,17); kept=sum(filt.keep() for _ in range(10000)); assert abs(kept/10000-.8)<.02
+
+def test_planners_do_not_import_simulator_internals():
+    import ast
+    from pathlib import Path
+    package=Path(__file__).parents[1]/'amr_lab'
+    checked=list((package/'core').rglob('*.py'))+[package/'nodes'/'robot_node.py']
+    for path in checked:
+        tree=ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node,ast.Import):
+                assert all('sim_node' not in alias.name for alias in node.names), path
+            if isinstance(node,ast.ImportFrom):
+                assert 'sim_node' not in (node.module or ''), path
