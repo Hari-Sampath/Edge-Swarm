@@ -71,9 +71,11 @@ class RobotNode(Node):
         if self.pose and self.pose.get('tick')==self.tick and self.bus_tick!=self.tick:self.publish_intent()
     def publish_intent(self):
         intent=[]
-        if self.task:
-            goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal'])
-            state={'robot_id':self.name,'tick':self.tick-1,'position':tuple(self.pose['cell']),'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering}
+        recovery_mode=self.recovering or any(peer.get('recovering',False) for peer in self.peers.values())
+        if self.task or recovery_mode:
+            cell=tuple(self.pose['cell'])
+            goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal']) if self.task else cell
+            state={'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering}
             intent=self.resolver.plan(state,self.peers)
         bus=BusMessage(self.name,self.tick,tuple(self.pose['cell']),intent[:int(self.p['intent_steps'])],bool(self.task),self.recovering)
         self.last_bus=bus.encode(); self.bus_tick=self.tick; self.pub_bus.publish(String(data=self.last_bus)); self.act_if_ready()
@@ -82,6 +84,7 @@ class RobotNode(Node):
         peers={f'robot_{i}' for i in range(int(self.p['robot_count'])) if f'robot_{i}'!=self.name}
         if self.pose is None or self.pose.get('tick')!=self.tick or len(self.seen)<len(peers) or self.tick<=0:return
         cell=tuple(self.pose['cell']); target=cell; why='no task assigned'
+        recovery_mode=self.recovering or any(peer.get('recovering',False) for peer in self.peers.values())
         if self.task:
             goal=tuple(self.task['start'] if self.phase=='pickup' else self.task['goal'])
             if cell==goal:
@@ -93,11 +96,14 @@ class RobotNode(Node):
                 path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering},self.peers)
                 if path:target=tuple(path[0][0]); why=f'clear next reservation at {target}'
                 elif self.recovering or any(item.get('recovering',False) for item in self.peers.values()):
-                    count=int(self.p['robot_count']); token=f'robot_{(self.tick//int(self.p["deadlock_ticks"]))%count}'
-                    active=[f'robot_{i}' for i in range(count) if f'robot_{i}'==self.name and self.task or self.peers.get(f'robot_{i}',{}).get('has_task',False)]
-                    token=active[((self.tick-1)//int(self.p['deadlock_ticks']))%len(active)] if active else self.name
+                    count=int(self.p['robot_count']); token=f'robot_{(self.tick-1)%count}'
                     why=f'yielding recovery turn to {token}' if token!=self.name else 'recovery turn has no safe route'
                 else:why='no safe route is available'
+        elif recovery_mode:
+            state={'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':cell,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':False,'recovering':False}
+            path=self.resolver.plan(state,self.peers)
+            if path:target=tuple(path[0][0]); why=f'clearing aisle toward {target}'
+            else:why=f'yielding recovery turn to robot_{(self.tick-1)%int(self.p["robot_count"])}'
         action='MOVE' if target!=cell else 'WAIT'
         if action=='WAIT':
             self.waits+=1
