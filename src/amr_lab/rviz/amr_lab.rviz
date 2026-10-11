@@ -1,0 +1,21 @@
+# Robot Visualization tool (RViz2) layout for the autonomous mobile robot warehouse.
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Warehouse and robots
+      Topic: /visualization_marker_array
+      Enabled: true
+  Global Options:
+    Fixed Frame: map
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 20
+      Name: Current View

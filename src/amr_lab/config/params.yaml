@@ -1,0 +1,16 @@
+/**:
+  ros__parameters:
+    robot_count: 4
+    seed: 1
+    packet_loss: 0.0
+    task_arrival_rate: 0.0
+    task_count: 8
+    tick_rate: 1000.0
+    max_ticks: 3000
+    deadlock_ticks: 20
+    peer_timeout: 6
+    allocator: hungarian
+    conflict_resolver: reservation
+    intent_steps: 8
+    show_markers: true
+    headless: true

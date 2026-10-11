@@ -1,0 +1,14 @@
+# American Standard Code for Information Interchange (ASCII) grid: # walls, . aisles.
+# One-cell vertical corridors are choke points.
+grid:
+  - "###############"
+  - "#...#...#.....#"
+  - "#...#...#.....#"
+  - "#.............#"
+  - "#...#...#.....#"
+  - "#...#...#.....#"
+  - "#...#...#.....#"
+  - "#.............#"
+  - "#...#...#.....#"
+  - "#...#...#.....#"
+  - "###############"
