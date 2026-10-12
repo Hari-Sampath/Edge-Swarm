@@ -20,7 +20,7 @@ class ReservationResolver:
         recovery_turn=False
         if recovery and recovery_mode:
             # Every robot uses the same full-id rotation, including idle robots.
-            token=f"robot_{(tick//recovery)%count}"
+            token=f"robot_{tick%count}"
             if token!=me:return []
             recovery_turn=True
         if recovery_turn and not robot_state.get('has_task',True) and start in self.world.parking_cells:
