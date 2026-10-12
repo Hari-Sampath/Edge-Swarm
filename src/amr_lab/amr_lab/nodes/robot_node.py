@@ -21,7 +21,7 @@ class RobotNode(Node):
         rows=[line.strip().split('"')[1] for line in cfg.read_text().splitlines() if line.strip().startswith('- "')]
         self.world=World(tuple(rows)); self.resolver=CONFLICTS[self.p['conflict_resolver']](self.world,int(self.p['intent_steps']))
         idx=int(self.name.split('_')[-1]); self.loss=LossFilter(float(self.p['packet_loss']),int(self.p['seed'])+idx*1009)
-        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.last_move=None; self.bus_tick=0; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0; self.wait_streak=0; self.recovering=False
+        self.peers={}; self.seen=set(); self.pending={}; self.tick=0; self.last_bus=None; self.bus_tick=0; self.acted_tick=0; self.pose=None; self.task=None; self.phase='pickup'; self.waits=0; self.wait_streak=0; self.recovering=False
         bus_qos=10
         self.pub_bus=self.create_publisher(String,f'/bus/{self.name}',bus_qos)
         self.pub_move=self.create_publisher(String,f'/{self.name}/move',10)
@@ -59,9 +59,7 @@ class RobotNode(Node):
         self.act_if_ready()
     def on_tick(self,msg):
         if msg.data==self.tick and self.last_bus is not None and self.pose and self.pose.get('tick')==self.tick:
-            self.pub_bus.publish(String(data=self.last_bus))
-            if self.last_move is not None:self.pub_move.publish(String(data=self.last_move))
-            return
+            self.pub_bus.publish(String(data=self.last_bus)); return
         if msg.data<self.tick:return
         if msg.data>self.tick:self.tick=msg.data; self.seen=set()
         for peer in list(self.peers):
@@ -118,7 +116,7 @@ class RobotNode(Node):
         self.acted_tick=self.tick
         line=f'[t={self.tick}] {self.name} | {action} | {why}'; self.get_logger().info(line)
         with (self.log_path/'decisions.log').open('a') as log:log.write(line+'\n')
-        self.last_move=json.dumps({'tick':self.tick,'cell':target}); self.pub_move.publish(String(data=self.last_move))
+        self.pub_move.publish(String(data=json.dumps({'tick':self.tick,'cell':target})))
 
 def main(args=None):
     rclpy.init(args=args); node=RobotNode()

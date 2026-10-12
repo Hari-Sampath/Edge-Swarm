@@ -65,16 +65,10 @@ def test_recovery_turn_is_deterministic_and_ordered():
 
 def test_idle_robot_gets_a_recovery_turn_from_global_rotation():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_0','tick':3,'position':(0,0),'goal':(0,0),'recovery_ticks':3,'robot_count':3,'has_task':False}
-    peers={'robot_1':{'tick':3,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
+    state={'robot_id':'robot_0','tick':3,'position':(2,1),'goal':(2,1),'recovery_ticks':3,'robot_count':3,'has_task':False}
+    peers={'robot_1':{'tick':3,'position':(2,2),'intent':[],'recovering':True,'has_task':False}}
     path=resolver.plan(state,peers)
     assert path and path[0][0]!=state['position']
-
-def test_idle_robot_stays_put_after_reaching_parking_cell():
-    world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_0','tick':3,'position':(1,1),'goal':(1,1),'recovery_ticks':3,'robot_count':3,'has_task':False}
-    peers={'robot_1':{'tick':3,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
-    assert resolver.plan(state,peers)==[((1,1),4)]
 
 
 def test_seeded_dynamic_task_arrivals_repeat_and_release_once():

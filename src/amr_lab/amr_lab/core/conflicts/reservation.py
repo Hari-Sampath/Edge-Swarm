@@ -23,8 +23,6 @@ class ReservationResolver:
             token=f"robot_{tick%count}"
             if token!=me:return []
             recovery_turn=True
-        if recovery_turn and not robot_state.get('has_task',True) and start in self.world.parking_cells:
-            return [(start,tick+1)]
         resources={cell:rid for rid,cell in self.world.chokes.items()}
         open_path=astar(self.world,start,goal,occupied,start_time=tick)
         # Choke requests use ascending resource numbers; lower robot id wins equal requests.
