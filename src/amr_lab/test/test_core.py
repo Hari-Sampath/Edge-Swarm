@@ -57,28 +57,28 @@ def test_loss_ratio_matches_configured_probability_per_attempt():
 
 def test_recovery_turn_is_deterministic_and_ordered():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_1','tick':21,'position':(1,1),'goal':(4,1),'wait_streak':10,'recovery_ticks':10,'robot_count':3,'recovering':True}
-    peers={'robot_0':{'tick':20,'position':(3,1),'intent':[],'has_task':True},'robot_1':{'tick':20,'position':(2,2),'intent':[],'has_task':False}}
+    state={'robot_id':'robot_1','tick':30,'position':(1,1),'goal':(4,1),'wait_streak':10,'recovery_ticks':10,'robot_count':3,'recovering':True}
+    peers={'robot_0':{'tick':30,'position':(3,1),'intent':[],'has_task':True},'robot_1':{'tick':30,'position':(2,2),'intent':[],'has_task':False}}
     assert resolver.plan(state,peers)==[]
     state['robot_id']='robot_0'; state['position']=(3,1); state['goal']=(0,1)
     assert resolver.plan(state,peers)
 
 def test_idle_robot_gets_a_recovery_turn_from_global_rotation():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_0','tick':3,'position':(0,0),'goal':(0,0),'recovery_ticks':3,'robot_count':3,'has_task':False}
+    state={'robot_id':'robot_0','tick':0,'position':(0,0),'goal':(0,0),'recovery_ticks':3,'robot_count':3,'has_task':False}
     peers={'robot_1':{'tick':3,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
     path=resolver.plan(state,peers)
     assert path and path[0][0]!=state['position']
 
 def test_idle_robot_stays_put_after_reaching_parking_cell():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_0','tick':3,'position':(1,1),'goal':(1,1),'recovery_ticks':3,'robot_count':3,'has_task':False}
-    peers={'robot_1':{'tick':3,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
-    assert resolver.plan(state,peers)==[((1,1),4)]
+    state={'robot_id':'robot_0','tick':0,'position':(1,1),'goal':(1,1),'recovery_ticks':3,'robot_count':3,'has_task':False}
+    peers={'robot_1':{'tick':0,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
+    assert resolver.plan(state,peers)==[((1,1),1)]
 
 def test_recovering_task_robot_takes_safe_step_toward_its_goal():
     world=small_world(); resolver=ReservationResolver(world)
-    state={'robot_id':'robot_0','tick':3,'position':(1,1),'goal':(4,1),'recovery_ticks':3,'robot_count':3,'has_task':True,'recovering':True}
+    state={'robot_id':'robot_0','tick':0,'position':(1,1),'goal':(4,1),'recovery_ticks':3,'robot_count':3,'has_task':True,'recovering':True}
     peers={'robot_1':{'tick':3,'position':(4,2),'intent':[],'recovering':False}}
     path=resolver.plan(state,peers)
     assert path and path[0][0]==(2,1)

@@ -98,14 +98,17 @@ class RobotNode(Node):
                 path=self.resolver.plan({'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':goal,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':bool(self.task),'recovering':self.recovering},self.peers)
                 if path:target=tuple(path[0][0]); why=f'clear next reservation at {target}'
                 elif self.recovering or any(item.get('recovering',False) for item in self.peers.values()):
-                    count=int(self.p['robot_count']); token=f'robot_{(self.tick-1)%count}'
+                    count=int(self.p['robot_count']); slot=int(self.p['deadlock_ticks'])
+                    token=f'robot_{((self.tick-1)//slot)%count}'
                     why=f'yielding recovery turn to {token}' if token!=self.name else 'recovery turn has no safe route'
                 else:why='no safe route is available'
         elif recovery_mode:
             state={'robot_id':self.name,'tick':self.tick-1,'position':cell,'goal':cell,'timeout':int(self.p['peer_timeout']),'wait_streak':self.wait_streak,'recovery_ticks':int(self.p['deadlock_ticks']),'robot_count':int(self.p['robot_count']),'has_task':False,'recovering':False}
             path=self.resolver.plan(state,self.peers)
             if path:target=tuple(path[0][0]); why=f'clearing aisle toward {target}'
-            else:why=f'yielding recovery turn to robot_{(self.tick-1)%int(self.p["robot_count"])}'
+            else:
+                slot=int(self.p['deadlock_ticks']); count=int(self.p['robot_count'])
+                why=f'yielding recovery turn to robot_{((self.tick-1)//slot)%count}'
         action='MOVE' if target!=cell else 'WAIT'
         if action=='WAIT':
             self.waits+=1
