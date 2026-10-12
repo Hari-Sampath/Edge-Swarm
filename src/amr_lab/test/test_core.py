@@ -76,6 +76,13 @@ def test_idle_robot_stays_put_after_reaching_parking_cell():
     peers={'robot_1':{'tick':3,'position':(0,1),'intent':[],'recovering':True,'has_task':False}}
     assert resolver.plan(state,peers)==[((1,1),4)]
 
+def test_recovering_task_robot_takes_safe_step_toward_its_goal():
+    world=small_world(); resolver=ReservationResolver(world)
+    state={'robot_id':'robot_0','tick':3,'position':(1,1),'goal':(4,1),'recovery_ticks':3,'robot_count':3,'has_task':True,'recovering':True}
+    peers={'robot_1':{'tick':3,'position':(4,2),'intent':[],'recovering':False}}
+    path=resolver.plan(state,peers)
+    assert path and path[0][0]==(2,1)
+
 
 def test_seeded_dynamic_task_arrivals_repeat_and_release_once():
     from amr_lab.core.task_stream import SeededTaskStream

@@ -112,9 +112,9 @@ class RobotNode(Node):
             self.wait_streak=self.wait_streak+1 if self.task else 0
             if self.task and self.wait_streak>=int(self.p['deadlock_ticks']):self.recovering=True
             self.pub_wait.publish(String(data=json.dumps({'robot_id':self.name,'tick':self.tick})))
-        if action=='MOVE' and not self.recovering:self.wait_streak=0
-        if action=='MOVE' and self.recovering and target in self.world.parking_cells:
-            self.recovering=False; self.wait_streak=0
+        if action=='MOVE':
+            self.wait_streak=0
+            if self.recovering:self.recovering=False
         self.acted_tick=self.tick
         line=f'[t={self.tick}] {self.name} | {action} | {why}'; self.get_logger().info(line)
         with (self.log_path/'decisions.log').open('a') as log:log.write(line+'\n')

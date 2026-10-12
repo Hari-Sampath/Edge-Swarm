@@ -39,10 +39,14 @@ class ReservationResolver:
         blocked=occupied | {(cell,t) for cell,t,peer in intents if (cell,t,peer) not in overrides}
         path=astar(self.world,start,goal,blocked,start_time=tick)
         if recovery_turn:
-            escapes=[]
-            for parking in self.world.parking_cells:
-                if parking==start:continue
-                route=astar(self.world,start,parking,blocked,start_time=tick)
-                if route and route[0][0]!=start:escapes.append((len(route),parking,route))
-            if escapes:path=min(escapes,key=lambda item:(item[0],item[1]))[2]
+            should_escape=not robot_state.get('has_task',True) or not path or path[0][0]==start
+            if should_escape and not robot_state.get('has_task',True) and start in self.world.parking_cells:
+                return [(start,tick+1)]
+            if should_escape:
+                escapes=[]
+                for parking in self.world.parking_cells:
+                    if parking==start:continue
+                    route=astar(self.world,start,parking,blocked,start_time=tick)
+                    if route and route[0][0]!=start:escapes.append((len(route),parking,route))
+                if escapes:path=min(escapes,key=lambda item:(item[0],item[1]))[2]
         return path[:self.intent_steps]
